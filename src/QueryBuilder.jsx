@@ -1,8 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React from "react";
 import { useEffect, useState } from "react";
-import { Space, Card, Input, Switch, Button, Modal, Spin } from "antd";
+import { Space, Card, Input, Switch, Button, Modal, Spin, Divider } from "antd";
 import SelectMultiple from "./SelectMultiple";
+import { createPortal } from 'react-dom';
+import SampleValues from "./Sample";
 import {
   Utils as QbUtils,
   Query,
@@ -18,6 +20,13 @@ const DemoQueryBuilder = () => {
   const [config, setConfig] = useState(InitialConfig);
   const [includeQueryTree, setIncludeQueryTree] = useState(null);
   const [excludeQueryTree, setExcludeQueryTree] = useState(null); // Use a state variable for config
+  const [includeQuerySampleValueProperties, setIncludeQuerySampleValueProperties] = useState([])
+  const [excludeQuerySampleValueProperties, setExcludeQuerySampleValueProperties] = useState([])
+  const [excludeQuerySampleValuesNode, setExcludeQuerySampleValuesNode] = useState(null)
+  const [includeQuerySampleValuesNode, setIncludeQuerySampleValuesNode] = useState(null)
+  const [includeNodes, setIncludeNodes] = useState([])
+  const [excludeNodes, setExcludeNodes] = useState([])
+
 
   useEffect(() => {
   fetch("http://localhost:3001/get-column-names")
@@ -76,16 +85,71 @@ const DemoQueryBuilder = () => {
     });
 }, []);
 
+  const getSelectedField = (tree) => {
+    // Implement logic to find the selected field from the tree
+    // Here, we will look for the selected field in the 'properties' of the first rule.
+    if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
+      let rule = tree.children1[0];
+      let properties = []
+      tree.children1.forEach(element => {
+        rule = element
+        if (rule && rule.properties && rule.properties.field) {
+          properties.push([rule.properties.field, rule.properties.valueType, rule.id])
+        }
+      });
+      return properties
+    }
+    return [];
+  };
+
   const onChangeInclude = (immutableTree) => {
     setIncludeQueryTree(immutableTree);
     const jsonTree = QbUtils.getTree(immutableTree);
     console.log(jsonTree);
+    setIncludeQuerySampleValueProperties(() => getSelectedField(jsonTree))
+    let siblingNode = document.createElement('span');
+    setIncludeQuerySampleValuesNode(() => {
+      includeQuerySampleValueProperties.forEach((element) =>{
+        let parentNodes = document.querySelector(`div[data-id="${element[2]}"]`)
+        console.log("parent", parentNodes)
+        let spanNode = parentNodes.querySelector('span')
+        if (!spanNode) {
+          let inputNode = parentNodes.querySelector('input[type="text"]')
+          console.log("inputnode",inputNode)
+          inputNode.parentNode.appendChild(siblingNode)
+          setIncludeNodes((prevValue)=> [...prevValue,createPortal(<SampleValues field={element[0]} />, siblingNode)])
+        }
+      })
+      if(includeNodes != [])
+        return includeNodes
+      else 
+        return null
+    })
   };
 
   const onChangeExclude = (immutableTree) => {
     setExcludeQueryTree(immutableTree);
     const jsonTree = QbUtils.getTree(immutableTree);
     console.log(jsonTree);
+    let siblingNode = document.createElement('span');
+    setExcludeQuerySampleValueProperties(() => getSelectedField(jsonTree))
+    setExcludeQuerySampleValuesNode(() => {
+      excludeQuerySampleValueProperties.forEach((element) =>{
+        let parentNodes = document.querySelector(`div[data-id="${element[2]}"]`)
+        console.log("parent", parentNodes)
+        let spanNode = parentNodes.querySelector('span')
+        if (!spanNode) {
+          let inputNode = parentNodes.querySelector('input[type="text"]')
+          console.log("inputnode",inputNode)
+          inputNode.parentNode.appendChild(siblingNode)
+          setExcludeNodes((prevValue)=> [...prevValue,createPortal(<SampleValues field={element[0]} />, siblingNode)])
+        }
+      })
+      if(excludeNodes != [])
+        return excludeNodes
+      else 
+        return null
+    })
   };
 
   const renderBuilder = (props) => (
@@ -98,6 +162,14 @@ const DemoQueryBuilder = () => {
             <Spin />
           </p>
         )}
+        { excludeQuerySampleValuesNode ? 
+          excludeQuerySampleValuesNode :
+          ""
+        }
+        { includeQuerySampleValuesNode ?
+          includeQuerySampleValuesNode :
+          ""
+        }
       </div>
     </div>
   );
@@ -208,22 +280,36 @@ const DemoQueryBuilder = () => {
                   Compute Audience
                 </Button>
               </div>
-              <div>
-                <Button
-                  style={{
-                    width: "100%",
-                    textAlign: "center",
-                    height: "50px",
-                    marginTop: "25px",
-                    backgroundColor: "rgb(246, 255, 237)",
-                  }}
-                  onClick={handleIncludeQuery}
-                >
-                  {showIncludeQueryComponent
-                    ? "Include in my audience"
-                    : "Include in my audience"}
-                </Button>
+              <div onClick={(e) => e.preventDefault()}>
+                {showIncludeQueryComponent ? (
+                  <div style={{ textAlign: "center" }}>
+                    <Divider
+                      plain
+                      style={{
+                        color: "rgb(11, 50, 0)",
+                        borderColor: "grey",
+                        paddingInline: "10rem",
+                      }}
+                    >
+                      Included in my audience
+                    </Divider>
+                  </div>
+                ) : (
+                  <Button
+                    style={{
+                      width: "100%",
+                      textAlign: "center",
+                      height: "50px",
+                      marginTop: "25px",
+                      backgroundColor: "rgb(246, 255, 237)",
+                    }}
+                    onClick={handleIncludeQuery}
+                  >
+                    Include in my audience
+                  </Button>
+                )}
               </div>
+              <div className="include-query">
               {showIncludeQueryComponent && (
                 <Query
                   {...config}
@@ -232,23 +318,36 @@ const DemoQueryBuilder = () => {
                   renderBuilder={renderBuilder}
                 />
               )}
-              <div onClick={(e) => e.preventDefault()}>
-                <Button
-                  style={{
-                    width: "100%",
-                    textAlign: "center",
-                    height: "50px",
-                    marginTop: "15px",
-                    backgroundColor: "rgba(248, 22, 22, 0.05)",
-                  }}
-                  onClick={handleExcludeQuery}
-                >
-                  {showExcludeQueryComponent
-                    ? "Exclude from my audience"
-                    : "Exclude from my audience"}
-                </Button>
               </div>
-              {showExcludeQueryComponent && (
+              <div onClick={(e) => e.preventDefault()}>
+                {showExcludeQueryComponent ? (
+                  <Divider
+                    plain
+                    style={{
+                      color: "rgb(53, 1, 1)",
+                      borderColor: "grey",
+                      paddingInline: "10rem",
+                    }}
+                  >
+                    Excluded in my audience
+                  </Divider>
+                ) : (
+                  <Button
+                    style={{
+                      width: "100%",
+                      textAlign: "center",
+                      height: "50px",
+                      marginTop: "15px",
+                      backgroundColor: "rgba(248, 22, 22, 0.05)",
+                    }}
+                    onClick={handleExcludeQuery}
+                  >
+                    Exclude in my audience
+                  </Button>
+                )}
+              </div>
+              <div className="exclude-query">
+              {(showExcludeQueryComponent) && (
                 <Query
                   {...config}
                   value={excludeQueryTree}
@@ -256,13 +355,16 @@ const DemoQueryBuilder = () => {
                   renderBuilder={renderBuilder}
                 />
               )}
+              </div>
             </Card>
             <div>
-              JsonLogic:{" "}
+              Include Query JsonLogic:{" "}
               <pre>
-                {JSON.stringify(
-                  QbUtils.jsonLogicFormat(includeQueryTree, config)
-                )}
+                {JSON.stringify(QbUtils.jsonLogicFormat(includeQueryTree, config))}
+              </pre>
+              Exclude Query JsonLogic:{" "}
+              <pre>
+                {JSON.stringify(QbUtils.jsonLogicFormat(excludeQueryTree, config))}
               </pre>
             </div>
           </Space>

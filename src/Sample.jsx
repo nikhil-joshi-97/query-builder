@@ -7,18 +7,22 @@ const SampleValues = ({ field }) => {
     qty: "10, 20, 30",
     price: "$10, $20, $30",
     color: "Yellow, Green, Orange",
-    name: "Nikhil, Rutuja, Nishant",
+    user: "Nikhil, Rutuja, Nishant",
     promo: "True, False",
     anyitem: "Pencil, Pen"
   };
 
-  return (
-    <Tooltip title={sampleValues[field]}>
-      <span>
-        Sample Values: <BarsOutlined />
-      </span>
-    </Tooltip>
-  );
+  if(sampleValues.hasOwnProperty(field)) {
+    return (
+      <Tooltip title={sampleValues[field]}>
+        <span>
+          <BarsOutlined />
+        </span>
+      </Tooltip>
+    );
+  }
+
+  return null
 };
 
 export default SampleValues;
