@@ -20,44 +20,41 @@ const DemoQueryBuilder = () => {
   const [config, setConfig] = useState(InitialConfig);
   const [includeQueryTree, setIncludeQueryTree] = useState(null);
   const [excludeQueryTree, setExcludeQueryTree] = useState(null); // Use a state variable for config
-  const [includeQuerySampleValueProperties, setIncludeQuerySampleValueProperties] = useState([])
-  const [excludeQuerySampleValueProperties, setExcludeQuerySampleValueProperties] = useState([])
-  const [excludeQuerySampleValuesNode, setExcludeQuerySampleValuesNode] = useState(null)
-  const [includeQuerySampleValuesNode, setIncludeQuerySampleValuesNode] = useState(null)
-  const [includeNodes, setIncludeNodes] = useState([])
-  const [excludeNodes, setExcludeNodes] = useState([])
-
+  const [includeQuerySampleValueProperties, setIncludeQuerySampleValueProperties] = useState({});
+  const [excludeQuerySampleValueProperties, setExcludeQuerySampleValueProperties,] = useState({});
+  const [excludeQuerySampleValuesNode, setExcludeQuerySampleValuesNode] = useState({});
+  const [includeQuerySampleValuesNode, setIncludeQuerySampleValuesNode] = useState({});
 
   useEffect(() => {
-  fetch("http://localhost:3001/get-column-names")
-    .then((response) => response.json())
-    .then((data) => {
-      setColumnNames(data.columnNames);
+    fetch("http://localhost:3001/get-column-names")
+      .then((response) => response.json())
+      .then((data) => {
+        setColumnNames(data.columnNames);
 
-      // Create dynamic fields and update the config
-      const dynamicFields = {};
-      for (const columnName of data.columnNames) {
-        // Capitalize the first letter of columnName
-        const capitalizedColumnName =
-          columnName.charAt(0).toUpperCase() + columnName.slice(1);
+        // Create dynamic fields and update the config
+        const dynamicFields = {};
+        for (const columnName of data.columnNames) {
+          // Capitalize the first letter of columnName
+          const capitalizedColumnName =
+            columnName.charAt(0).toUpperCase() + columnName.slice(1);
 
-        dynamicFields[columnName] = {
-          label: capitalizedColumnName,
-          type: "text", // You can set an appropriate type
-        };
-      }
+          dynamicFields[columnName] = {
+            label: capitalizedColumnName,
+            type: "text", // You can set an appropriate type
+          };
+        }
 
-      if (
-        data.columnNames.includes("email") &&
-        data.columnNames.includes("name")
-      ) {
-        setConfig({
-          ...config,
-          fields: {
-            ...dynamicFields,
-            customer: {
-              label: "Customer",
-              type: "!group",
+        if (
+          data.columnNames.includes("email") &&
+          data.columnNames.includes("name")
+        ) {
+          setConfig({
+            ...config,
+            fields: {
+              ...dynamicFields,
+              customer: {
+                label: "Customer",
+                type: "!group",
                 subfields: {
                   name: {
                     label: "Name",
@@ -65,91 +62,94 @@ const DemoQueryBuilder = () => {
                   },
                   email: {
                     label: "Email",
-                  type: "text",
+                    type: "text",
+                  },
                 },
               },
             },
-          },
-        });
-      } else {
-        setConfig({
-          ...config,
-          fields: {
-            ...dynamicFields,
-          },
-        });
-      }
-    })
-    .catch((error) => {
-      console.error(error);
-    });
-}, []);
+          });
+        } else {
+          setConfig({
+            ...config,
+            fields: {
+              ...dynamicFields,
+            },
+          });
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
 
-  const getSelectedField = (tree) => {
-    // Implement logic to find the selected field from the tree
-    // Here, we will look for the selected field in the 'properties' of the first rule.
+  const getSelectedField = (tree, sampleValueProperties) => {
     if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
       let rule = tree.children1[0];
-      let properties = []
-      tree.children1.forEach(element => {
-        rule = element
+      tree.children1.forEach((element) => {
+        rule = element;
         if (rule && rule.properties && rule.properties.field) {
-          properties.push([rule.properties.field, rule.properties.valueType, rule.id])
+          sampleValueProperties[rule.id] = [rule.properties.field, rule.properties.valueType]
         }
       });
-      return properties
+      return sampleValueProperties;
     }
-    return [];
+    return {};
   };
 
   const onChangeInclude = (immutableTree) => {
     setIncludeQueryTree(immutableTree);
     const jsonTree = QbUtils.getTree(immutableTree);
     console.log(jsonTree);
-    setIncludeQuerySampleValueProperties(() => getSelectedField(jsonTree))
-    let siblingNode = document.createElement('span');
-    setIncludeQuerySampleValuesNode(() => {
-      includeQuerySampleValueProperties.forEach((element) =>{
-        let parentNodes = document.querySelector(`div[data-id="${element[2]}"]`)
-        console.log("parent", parentNodes)
+    setIncludeQuerySampleValueProperties(() => getSelectedField(jsonTree, includeQuerySampleValueProperties));
+    setIncludeQuerySampleValuesNode((prevValue) => {
+      let siblingNode = document.createElement("span");
+      console.log("include sample", Object.entries(includeQuerySampleValueProperties))
+      Object.entries(includeQuerySampleValueProperties).forEach(([key, value]) => {
+        let parentNodes = document.querySelector(`div[data-id="${key}"]`);
         let spanNode = parentNodes.querySelector('span')
-        if (!spanNode) {
+        if (!spanNode){
+          siblingNode.classList.add(`${key}`);
           let inputNode = parentNodes.querySelector('input[type="text"]')
-          console.log("inputnode",inputNode)
           inputNode.parentNode.appendChild(siblingNode)
-          setIncludeNodes((prevValue)=> [...prevValue,createPortal(<SampleValues field={element[0]} />, siblingNode)])
+          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
         }
-      })
-      if(includeNodes != [])
-        return includeNodes
-      else 
-        return null
-    })
+        else if ((spanNode.className === `${key}`) && prevValue.hasOwnProperty(key)){
+          siblingNode.classList.add(`${key}`);
+          let inputNode = parentNodes.querySelector('input[type="text"]')
+          inputNode.parentNode.appendChild(siblingNode)
+          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+        }
+      });
+      return prevValue
+    });
   };
 
   const onChangeExclude = (immutableTree) => {
     setExcludeQueryTree(immutableTree);
     const jsonTree = QbUtils.getTree(immutableTree);
     console.log(jsonTree);
-    let siblingNode = document.createElement('span');
-    setExcludeQuerySampleValueProperties(() => getSelectedField(jsonTree))
-    setExcludeQuerySampleValuesNode(() => {
-      excludeQuerySampleValueProperties.forEach((element) =>{
-        let parentNodes = document.querySelector(`div[data-id="${element[2]}"]`)
-        console.log("parent", parentNodes)
+    setExcludeQuerySampleValueProperties(() => getSelectedField(jsonTree, excludeQuerySampleValueProperties));
+    setExcludeQuerySampleValuesNode((prevValue) => {
+      let siblingNode = document.createElement("span");
+      console.log("exclude sample", Object.entries(excludeQuerySampleValueProperties))
+      Object.entries(excludeQuerySampleValueProperties).forEach(([key, value]) => {
+        let parentNodes = document.querySelector(`div[data-id="${key}"]`);
         let spanNode = parentNodes.querySelector('span')
-        if (!spanNode) {
+        if (!spanNode){
+          siblingNode.classList.add(`${key}`);
           let inputNode = parentNodes.querySelector('input[type="text"]')
-          console.log("inputnode",inputNode)
           inputNode.parentNode.appendChild(siblingNode)
-          setExcludeNodes((prevValue)=> [...prevValue,createPortal(<SampleValues field={element[0]} />, siblingNode)])
+          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
         }
-      })
-      if(excludeNodes != [])
-        return excludeNodes
-      else 
-        return null
-    })
+        else if ((spanNode.className === `${key}`) && prevValue.hasOwnProperty(key)){
+          siblingNode.classList.add(`${key}`);
+          let inputNode = parentNodes.querySelector('input[type="text"]')
+          inputNode.parentNode.appendChild(siblingNode)
+          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+        }
+      });
+      return prevValue
+    });
   };
 
   const renderBuilder = (props) => (
@@ -162,14 +162,8 @@ const DemoQueryBuilder = () => {
             <Spin />
           </p>
         )}
-        { excludeQuerySampleValuesNode ? 
-          excludeQuerySampleValuesNode :
-          ""
-        }
-        { includeQuerySampleValuesNode ?
-          includeQuerySampleValuesNode :
-          ""
-        }
+        {excludeQuerySampleValuesNode ? Object.values(excludeQuerySampleValuesNode) : ""}
+        {includeQuerySampleValuesNode ? Object.values(includeQuerySampleValuesNode) : ""}
       </div>
     </div>
   );
@@ -310,14 +304,14 @@ const DemoQueryBuilder = () => {
                 )}
               </div>
               <div className="include-query">
-              {showIncludeQueryComponent && (
-                <Query
-                  {...config}
-                  value={includeQueryTree}
-                  onChange={onChangeInclude}
-                  renderBuilder={renderBuilder}
-                />
-              )}
+                {showIncludeQueryComponent && (
+                  <Query
+                    {...config}
+                    value={includeQueryTree}
+                    onChange={onChangeInclude}
+                    renderBuilder={renderBuilder}
+                  />
+                )}
               </div>
               <div onClick={(e) => e.preventDefault()}>
                 {showExcludeQueryComponent ? (
@@ -347,14 +341,14 @@ const DemoQueryBuilder = () => {
                 )}
               </div>
               <div className="exclude-query">
-              {(showExcludeQueryComponent) && (
-                <Query
-                  {...config}
-                  value={excludeQueryTree}
-                  onChange={onChangeExclude}
-                  renderBuilder={renderBuilder}
-                />
-              )}
+                {(showExcludeQueryComponent) && (
+                  <Query
+                    {...config}
+                    value={excludeQueryTree}
+                    onChange={onChangeExclude}
+                    renderBuilder={renderBuilder}
+                  />
+                )}
               </div>
             </Card>
             <div>
