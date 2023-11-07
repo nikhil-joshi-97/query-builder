@@ -26,57 +26,38 @@ const DemoQueryBuilder = () => {
   const [includeQuerySampleValuesNode, setIncludeQuerySampleValuesNode] = useState({});
 
   useEffect(() => {
-    fetch("http://localhost:3001/get-column-names")
+    fetch("http://localhost:3001/get-table-schema")
       .then((response) => response.json())
       .then((data) => {
-        setColumnNames(data.columnNames);
+        const schema = data.schema;
+        const columnNames = schema.fields.map((field) => field.name);
+        setColumnNames(columnNames);
 
         // Create dynamic fields and update the config
         const dynamicFields = {};
-        for (const columnName of data.columnNames) {
-          // Capitalize the first letter of columnName
-          const capitalizedColumnName =
-            columnName.charAt(0).toUpperCase() + columnName.slice(1);
-
-          dynamicFields[columnName] = {
-            label: capitalizedColumnName,
-            type: "text", // You can set an appropriate type
+        for (const field of schema.fields) {
+          const fieldConfig = {
+            label: field.name,
+            type: "text",
           };
-        }
-
-        if (
-          data.columnNames.includes("email") &&
-          data.columnNames.includes("name")
-        ) {
-          setConfig({
-            ...config,
-            fields: {
-              ...dynamicFields,
-              customer: {
-                label: "Customer",
-                type: "!group",
-                subfields: {
-                  name: {
-                    label: "Name",
+  
+          // If the field is a struct, add subfields
+          if (field.type === 'RECORD') {
+            fieldConfig.type = "!group";
+            fieldConfig.subfields = {};
+            for (const subfield of field.fields) {
+              fieldConfig.subfields[subfield.name] = {
+                label: subfield.name,
                     type: "text",
-                  },
-                  email: {
-                    label: "Email",
-                    type: "text",
-                  },
-                },
-              },
-            },
-          });
-        } else {
-          setConfig({
-            ...config,
-            fields: {
-              ...dynamicFields,
-            },
-          });
+                  };
+            }
+          }
+  
+          dynamicFields[field.name] = fieldConfig;
         }
-      })
+  
+          setConfig({ ...config, fields: dynamicFields });
+              })
       .catch((error) => {
         console.error(error);
       });
@@ -90,8 +71,7 @@ const DemoQueryBuilder = () => {
           e.preventDefault()
           let spanNodes = parentNodes.querySelector(`span`)
           if(spanNodes) {
-            console.log("delete",key)
-            spanNodes.parentNode.removeChild(spanNodes)
+            // spanNodes.parentNode.removeChild(spanNodes)
             dictionary[key] = undefined
             sampleValueProperties[key] = undefined
           }
@@ -102,44 +82,31 @@ const DemoQueryBuilder = () => {
   }
 
   const handleGroupDelete = (dictionary, tree, sampleValueProperties) => {
-    console.log("handleDeleteGroup Tree", tree)
-    let parentDiv = document.querySelector(`div[class="include-query"]`)
-    let buttons = parentDiv.querySelectorAll('button')
-    buttons.forEach(button => {
-      console.log("1",tree)
-      if(button.textContent === 'Delete') {
-        if(button.parentElement.className === "group--actions group--actions--tr") {
-          console.log("2",tree)
-          button.addEventListener('click', (e) => {
-            console.log("3", tree)
-            console.log("pn==>",button.parentNode.parentNode.parentNode)
-            if(button.parentNode.parentNode.parentNode.parentNode) {
-              let id = button.parentNode.parentNode.parentNode.getAttribute(`data-id`)
-              console.log("4", tree)
+    let parentDiv = document.getElementsByClassName("group group-or-rule")
+    Array.from(parentDiv).forEach(div => {
+      let buttons = div.querySelectorAll('button')
+      buttons.forEach(button => {
+        if(button.textContent === 'Delete') {
+          if(button.parentElement.className === "group--actions group--actions--tr") {
+            let id = div.getAttribute(`data-id`)
+            button.addEventListener('click', () => {
               [dictionary, sampleValueProperties] = deleteGroup(dictionary, tree, sampleValueProperties, id)
-              console.log("5", tree)
-              button.parentNode.parentNode.parentNode.parentNode.removeChild(button.parentNode.parentNode.parentNode)
-              console.log("6",tree)
-            }
-          })
+            })
+          }
         }
-      }
+      })
     })
     return [dictionary, sampleValueProperties];
   }
   
   const deleteGroup = (dictionary, tree, sampleValueProperties, id) => {
-    console.log("Delete group tree",tree)
     if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
       tree.children1.forEach((element) => {
         if(element.type === 'group' && element.children1 && element.children1.length > 0) {
-          console.log("element", element)
           deleteGroup(dictionary, element, sampleValueProperties, id)
         }
         if(element.id === id) {
-          console.log("children",element.children1)
-          element.children1.forEach((element2, index) => {
-            console.log(index,"id",element2.id)
+          element.children1.forEach((element2) => {
             sampleValueProperties[element2.id] = undefined
             dictionary[element2.id] = undefined
           })
@@ -151,15 +118,19 @@ const DemoQueryBuilder = () => {
 
   const getSelectedField = (tree, sampleValueProperties) => {
     if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
-      tree.children1.forEach((element) => {
-        if (element && element.type === 'rule' && element.properties && element.properties.field) {
-          sampleValueProperties[element.id] = [element.properties.field, element.properties.valueType]
-        }
-        if(element.type === 'group' && element.children1 && element.children1.length > 0) {
-          getSelectedField(element, sampleValueProperties)
-        }
-      });
-      return sampleValueProperties;
+      let subTree = tree.children1[0]
+      if (subTree.type === "rule_group" && subTree.children1 && subTree.children1.length > 0) {
+        subTree.children1.forEach((element) => {
+          console.log("elemet",element)
+          if (element && element.type === 'rule' && element.properties && element.properties.field) {
+            sampleValueProperties[element.id] = [element.properties.field, element.properties.valueType]
+          }
+          if(element.type === 'group' && element.children1 && element.children1.length > 0) {
+            getSelectedField(element, sampleValueProperties)
+          }
+        });
+        return sampleValueProperties;
+      }
     }
     return {};
   };
@@ -187,7 +158,6 @@ const DemoQueryBuilder = () => {
             inputNode.parentNode.appendChild(siblingNode)
             prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
           }
-          console.log("jsonTree", jsonTree)
           let groupDeleteResult = handleGroupDelete(prevValue, jsonTree, includeQuerySampleValueProperties)
           prevValue = groupDeleteResult[0]
           setIncludeQuerySampleValueProperties(() => groupDeleteResult[1])
@@ -223,12 +193,12 @@ const DemoQueryBuilder = () => {
             inputNode.parentNode.appendChild(siblingNode)
             prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
           }
-          let deleteResult = handleDelete(parentNodes, key, prevValue, excludeQuerySampleValueProperties)
-          prevValue = deleteResult[0]
-          setExcludeQuerySampleValueProperties(() => deleteResult[1])
           let groupDeleteResult = handleGroupDelete(prevValue, jsonTree, excludeQuerySampleValueProperties)
           prevValue = groupDeleteResult[0]
           setExcludeQuerySampleValueProperties(() => groupDeleteResult[1])
+          let deleteResult = handleDelete(parentNodes, key, prevValue, excludeQuerySampleValueProperties)
+          prevValue = deleteResult[0]
+          setExcludeQuerySampleValueProperties(() => deleteResult[1])
         }
       });
       return prevValue
