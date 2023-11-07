@@ -82,13 +82,81 @@ const DemoQueryBuilder = () => {
       });
   }, []);
 
+  const handleDelete = (parentNodes, key, dictionary, sampleValueProperties) => {
+    let buttons = parentNodes.querySelectorAll('button')
+    buttons.forEach(deleteButton => {
+      if (deleteButton.textContent === 'Delete') {
+        deleteButton.addEventListener('click', (e) => {
+          e.preventDefault()
+          let spanNodes = parentNodes.querySelector(`span`)
+          if(spanNodes) {
+            console.log("delete",key)
+            spanNodes.parentNode.removeChild(spanNodes)
+            dictionary[key] = undefined
+            sampleValueProperties[key] = undefined
+          }
+        })
+      }
+    })
+    return [dictionary, sampleValueProperties]
+  }
+
+  const handleGroupDelete = (dictionary, tree, sampleValueProperties) => {
+    console.log("handleDeleteGroup Tree", tree)
+    let parentDiv = document.querySelector(`div[class="include-query"]`)
+    let buttons = parentDiv.querySelectorAll('button')
+    buttons.forEach(button => {
+      console.log("1",tree)
+      if(button.textContent === 'Delete') {
+        if(button.parentElement.className === "group--actions group--actions--tr") {
+          console.log("2",tree)
+          button.addEventListener('click', (e) => {
+            console.log("3", tree)
+            console.log("pn==>",button.parentNode.parentNode.parentNode)
+            if(button.parentNode.parentNode.parentNode.parentNode) {
+              let id = button.parentNode.parentNode.parentNode.getAttribute(`data-id`)
+              console.log("4", tree)
+              [dictionary, sampleValueProperties] = deleteGroup(dictionary, tree, sampleValueProperties, id)
+              console.log("5", tree)
+              button.parentNode.parentNode.parentNode.parentNode.removeChild(button.parentNode.parentNode.parentNode)
+              console.log("6",tree)
+            }
+          })
+        }
+      }
+    })
+    return [dictionary, sampleValueProperties];
+  }
+  
+  const deleteGroup = (dictionary, tree, sampleValueProperties, id) => {
+    console.log("Delete group tree",tree)
+    if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
+      tree.children1.forEach((element) => {
+        if(element.type === 'group' && element.children1 && element.children1.length > 0) {
+          console.log("element", element)
+          deleteGroup(dictionary, element, sampleValueProperties, id)
+        }
+        if(element.id === id) {
+          console.log("children",element.children1)
+          element.children1.forEach((element2, index) => {
+            console.log(index,"id",element2.id)
+            sampleValueProperties[element2.id] = undefined
+            dictionary[element2.id] = undefined
+          })
+        }
+      });
+    }
+    return [dictionary, sampleValueProperties];
+  }
+
   const getSelectedField = (tree, sampleValueProperties) => {
     if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
-      let rule = tree.children1[0];
       tree.children1.forEach((element) => {
-        rule = element;
-        if (rule && rule.properties && rule.properties.field) {
-          sampleValueProperties[rule.id] = [rule.properties.field, rule.properties.valueType]
+        if (element && element.type === 'rule' && element.properties && element.properties.field) {
+          sampleValueProperties[element.id] = [element.properties.field, element.properties.valueType]
+        }
+        if(element.type === 'group' && element.children1 && element.children1.length > 0) {
+          getSelectedField(element, sampleValueProperties)
         }
       });
       return sampleValueProperties;
@@ -103,21 +171,29 @@ const DemoQueryBuilder = () => {
     setIncludeQuerySampleValueProperties(() => getSelectedField(jsonTree, includeQuerySampleValueProperties));
     setIncludeQuerySampleValuesNode((prevValue) => {
       let siblingNode = document.createElement("span");
-      console.log("include sample", Object.entries(includeQuerySampleValueProperties))
       Object.entries(includeQuerySampleValueProperties).forEach(([key, value]) => {
-        let parentNodes = document.querySelector(`div[data-id="${key}"]`);
-        let spanNode = parentNodes.querySelector('span')
-        if (!spanNode){
-          siblingNode.classList.add(`${key}`);
-          let inputNode = parentNodes.querySelector('input[type="text"]')
-          inputNode.parentNode.appendChild(siblingNode)
-          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
-        }
-        else if ((spanNode.className === `${key}`) && prevValue.hasOwnProperty(key)){
-          siblingNode.classList.add(`${key}`);
-          let inputNode = parentNodes.querySelector('input[type="text"]')
-          inputNode.parentNode.appendChild(siblingNode)
-          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+        if (includeQuerySampleValueProperties[key]) {
+          let parentNodes = document.querySelector(`div[data-id="${key}"]`);
+          let spanNode = parentNodes.querySelector('span')
+          if (!spanNode){
+            siblingNode.classList.add(`${key}`);
+            let inputNode = parentNodes.querySelector('input[type="text"]')
+            inputNode.parentNode.appendChild(siblingNode)
+            prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+          }
+          else if ((spanNode.className === `${key}`) && prevValue.hasOwnProperty(key)){
+            siblingNode.classList.add(`${key}`);
+            let inputNode = parentNodes.querySelector('input[type="text"]')
+            inputNode.parentNode.appendChild(siblingNode)
+            prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+          }
+          console.log("jsonTree", jsonTree)
+          let groupDeleteResult = handleGroupDelete(prevValue, jsonTree, includeQuerySampleValueProperties)
+          prevValue = groupDeleteResult[0]
+          setIncludeQuerySampleValueProperties(() => groupDeleteResult[1])
+          let deleteResult = handleDelete(parentNodes, key, prevValue, includeQuerySampleValueProperties)
+          prevValue = deleteResult[0]
+          setIncludeQuerySampleValueProperties(() => deleteResult[1])
         }
       });
       return prevValue
@@ -131,28 +207,50 @@ const DemoQueryBuilder = () => {
     setExcludeQuerySampleValueProperties(() => getSelectedField(jsonTree, excludeQuerySampleValueProperties));
     setExcludeQuerySampleValuesNode((prevValue) => {
       let siblingNode = document.createElement("span");
-      console.log("exclude sample", Object.entries(excludeQuerySampleValueProperties))
       Object.entries(excludeQuerySampleValueProperties).forEach(([key, value]) => {
-        let parentNodes = document.querySelector(`div[data-id="${key}"]`);
-        let spanNode = parentNodes.querySelector('span')
-        if (!spanNode){
-          siblingNode.classList.add(`${key}`);
-          let inputNode = parentNodes.querySelector('input[type="text"]')
-          inputNode.parentNode.appendChild(siblingNode)
-          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
-        }
-        else if ((spanNode.className === `${key}`) && prevValue.hasOwnProperty(key)){
-          siblingNode.classList.add(`${key}`);
-          let inputNode = parentNodes.querySelector('input[type="text"]')
-          inputNode.parentNode.appendChild(siblingNode)
-          prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+        if (excludeQuerySampleValueProperties[key]) {
+          let parentNodes = document.querySelector(`div[data-id="${key}"]`);
+          let spanNode = parentNodes.querySelector('span')
+          if (!spanNode){
+            siblingNode.classList.add(`${key}`);
+            let inputNode = parentNodes.querySelector('input[type="text"]')
+            inputNode.parentNode.appendChild(siblingNode)
+            prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+          }
+          else if ((spanNode.className === `${key}`) && prevValue.hasOwnProperty(key)){
+            siblingNode.classList.add(`${key}`);
+            let inputNode = parentNodes.querySelector('input[type="text"]')
+            inputNode.parentNode.appendChild(siblingNode)
+            prevValue[key] = createPortal(<SampleValues field={value[0]} />, siblingNode);
+          }
+          let deleteResult = handleDelete(parentNodes, key, prevValue, excludeQuerySampleValueProperties)
+          prevValue = deleteResult[0]
+          setExcludeQuerySampleValueProperties(() => deleteResult[1])
+          let groupDeleteResult = handleGroupDelete(prevValue, jsonTree, excludeQuerySampleValueProperties)
+          prevValue = groupDeleteResult[0]
+          setExcludeQuerySampleValueProperties(() => groupDeleteResult[1])
         }
       });
       return prevValue
     });
   };
 
-  const renderBuilder = (props) => (
+  const includeRenderBuilder = (props) => (
+    <div className="query-builder-container" style={{ padding: "10px" }}>
+      <div className="query-builder qb-lite">
+        {columnNames.length > 0 ? (
+          <Builder {...props} />
+        ) : (
+          <p>
+            <Spin />
+          </p>
+        )}
+        {includeQuerySampleValuesNode ? Object.values(includeQuerySampleValuesNode) : ""}
+      </div>
+    </div>
+  );
+
+  const excludeRenderBuilder = (props) => (
     <div className="query-builder-container" style={{ padding: "10px" }}>
       <div className="query-builder qb-lite">
         {columnNames.length > 0 ? (
@@ -163,7 +261,6 @@ const DemoQueryBuilder = () => {
           </p>
         )}
         {excludeQuerySampleValuesNode ? Object.values(excludeQuerySampleValuesNode) : ""}
-        {includeQuerySampleValuesNode ? Object.values(includeQuerySampleValuesNode) : ""}
       </div>
     </div>
   );
@@ -309,7 +406,7 @@ const DemoQueryBuilder = () => {
                     {...config}
                     value={includeQueryTree}
                     onChange={onChangeInclude}
-                    renderBuilder={renderBuilder}
+                    renderBuilder={includeRenderBuilder}
                   />
                 )}
               </div>
@@ -346,7 +443,7 @@ const DemoQueryBuilder = () => {
                     {...config}
                     value={excludeQueryTree}
                     onChange={onChangeExclude}
-                    renderBuilder={renderBuilder}
+                    renderBuilder={excludeRenderBuilder}
                   />
                 )}
               </div>
