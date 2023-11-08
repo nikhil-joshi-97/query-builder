@@ -9,16 +9,22 @@ const SampleValues = ({ field }) => {
     color: "Yellow, Green, Orange",
     name: "Nikhil, Rutuja, Nishant",
     promo: "True, False",
-    anyitem: "Pencil, Pen"
+    anyitem: "Pencil, Pen",
+    gender: "F, M",
+    city: "Pune, Pandharpur"
   };
 
-  return (
-    <Tooltip title={sampleValues[field]}>
-      <span>
-        Sample Values: <BarsOutlined />
-      </span>
-    </Tooltip>
-  );
+  let fieldValue = field.split("."); 
+
+  if(sampleValues.hasOwnProperty(fieldValue[1])) {
+    return (
+      <Tooltip title={sampleValues[fieldValue[1]]}>
+        <span>
+          <BarsOutlined />
+        </span>
+      </Tooltip>
+    );
+  }
 };
 
 export default SampleValues;

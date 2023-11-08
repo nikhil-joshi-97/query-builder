@@ -12,29 +12,26 @@ const bigquery = new BigQuery();
 
 app.use(cors());
 
-app.get("/get-column-names", async (req, res) => {
+// Define your dataset and table
+const datasetId = 'latest';
+const tableId = 'user';
+
+// Get the schema of the table
+async function getTableSchema() {
+  const dataset = bigquery.dataset(datasetId);
+  const table = dataset.table(tableId);
+  const [metadata] = await table.getMetadata();
+  return metadata.schema;
+}
+
+// Define your API endpoint to return the schema
+app.get('/get-table-schema', async (req, res) => {
   try {
-    const datasetId = "latest";
-    const tableId = "user";
-    const query = `
-      SELECT column_name
-      FROM agile-apex-401012.${datasetId}.INFORMATION_SCHEMA.COLUMNS
-      WHERE table_name = '${tableId}'
-    `;
-    const options = {
-      query: query,
-      location: "US", // Adjust the location as needed
-    };
-
-    const [job] = await bigquery.createQueryJob(options);
-    const [rows] = await job.getQueryResults();
-
-    const columnNames = rows.map((row) => row.column_name);
-
-    res.json({ columnNames }); // Send the column names as JSON response
+    const schema = await getTableSchema();
+    res.json({ schema });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "An error occurred" });
+    res.status(500).json({ error: 'Unable to fetch table schema' });
   }
 });
 
