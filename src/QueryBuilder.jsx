@@ -71,46 +71,59 @@ const DemoQueryBuilder = () => {
           e.preventDefault()
           let spanNodes = parentNodes.querySelector(`span`)
           if(spanNodes) {
-            // spanNodes.parentNode.removeChild(spanNodes)
-            dictionary[key] = undefined
-            sampleValueProperties[key] = undefined
+            dictionary[key] = undefined;
+            sampleValueProperties[key] = undefined;
           }
-        })
-      }
+        });
+      };
     })
-    return [dictionary, sampleValueProperties]
+    return [dictionary, sampleValueProperties];
   }
 
   const handleGroupDelete = (dictionary, tree, sampleValueProperties) => {
-    let parentDiv = document.getElementsByClassName("group group-or-rule")
+    let parentDiv = document.getElementsByClassName("query-builder qb-lite")
     Array.from(parentDiv).forEach(div => {
       let buttons = div.querySelectorAll('button')
       buttons.forEach(button => {
         if(button.textContent === 'Delete') {
           if(button.parentElement.className === "group--actions group--actions--tr") {
-            let id = div.getAttribute(`data-id`)
             button.addEventListener('click', () => {
-              [dictionary, sampleValueProperties] = deleteGroup(dictionary, tree, sampleValueProperties, id)
+              if(button.parentNode.parentNode.parentNode.parentNode) {
+                let parentDivs =  button.parentNode.parentNode.parentNode.getElementsByClassName("group rule_group group-or-rule")
+                console.log(parentDivs)
+                Array.from(parentDivs).forEach((singleDiv)=> {
+                  let id = singleDiv.getAttribute(`data-id`)
+                  if(id) {
+                    [dictionary, sampleValueProperties] = deleteGroup(dictionary, tree, sampleValueProperties, id)
+                  }
+                })
+              }
             })
           }
         }
-      })
-    })
+      });
+    });
     return [dictionary, sampleValueProperties];
   }
   
   const deleteGroup = (dictionary, tree, sampleValueProperties, id) => {
     if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
       tree.children1.forEach((element) => {
+        if (element.type === "rule_group" && element.children1 && element.children1.length > 0) {
+          console.log("id",element)
+          if (element.id === id) {
+            element.children1.forEach((element2) => {
+              console.log("4",id)
+              console.log("5",element2.id)
+                console.log("delete",id)
+                sampleValueProperties[element2.id] = undefined;
+                dictionary[element2.id] = undefined;
+            })
+          }
+        }
         if(element.type === 'group' && element.children1 && element.children1.length > 0) {
-          deleteGroup(dictionary, element, sampleValueProperties, id)
-        }
-        if(element.id === id) {
-          element.children1.forEach((element2) => {
-            sampleValueProperties[element2.id] = undefined
-            dictionary[element2.id] = undefined
-          })
-        }
+          [dictionary, sampleValueProperties] = deleteGroup(dictionary, element, sampleValueProperties, id);
+        } 
       });
     }
     return [dictionary, sampleValueProperties];
@@ -118,19 +131,21 @@ const DemoQueryBuilder = () => {
 
   const getSelectedField = (tree, sampleValueProperties) => {
     if (tree.type === "group" && tree.children1 && tree.children1.length > 0) {
-      let subTree = tree.children1[0]
-      if (subTree.type === "rule_group" && subTree.children1 && subTree.children1.length > 0) {
-        subTree.children1.forEach((element) => {
-          console.log("elemet",element)
-          if (element && element.type === 'rule' && element.properties && element.properties.field) {
-            sampleValueProperties[element.id] = [element.properties.field, element.properties.valueType]
-          }
-          if(element.type === 'group' && element.children1 && element.children1.length > 0) {
-            getSelectedField(element, sampleValueProperties)
-          }
-        });
-        return sampleValueProperties;
-      }
+      let subTree = tree.children1
+      subTree.forEach((element) => {
+        if (element.type === "rule_group" && element.children1 && element.children1.length > 0) {
+          let children = element.children1
+          children.forEach((element2) => {
+            if (element2 && element2.type === 'rule' && element2.properties && element2.properties.field) {
+              sampleValueProperties[element2.id] = [element2.properties.field, element2.properties.valueType]
+            }
+          })
+        }
+        if(element.type === 'group' && element.children1 && element.children1.length > 0) {
+          sampleValueProperties = getSelectedField(element, sampleValueProperties);
+        } 
+      });
+      return sampleValueProperties;
     }
     return {};
   };
@@ -142,6 +157,7 @@ const DemoQueryBuilder = () => {
     setIncludeQuerySampleValueProperties(() => getSelectedField(jsonTree, includeQuerySampleValueProperties));
     setIncludeQuerySampleValuesNode((prevValue) => {
       let siblingNode = document.createElement("span");
+      console.log("include",includeQuerySampleValueProperties)
       Object.entries(includeQuerySampleValueProperties).forEach(([key, value]) => {
         if (includeQuerySampleValueProperties[key]) {
           let parentNodes = document.querySelector(`div[data-id="${key}"]`);
@@ -166,6 +182,7 @@ const DemoQueryBuilder = () => {
           setIncludeQuerySampleValueProperties(() => deleteResult[1])
         }
       });
+      console.log("prevValue",prevValue)
       return prevValue
     });
   };
